@@ -11,11 +11,13 @@ import (
 
 const (
 	NoFileSystemGiven = "You need to provide a file system path"
+	InvalidFlag       = "The given flag is invalid"
 )
 
 func main() {
-	basePath, err := getFsFromArgs()
+	basePath, flag, err := getArgs()
 	if err != nil {
+		usage()
 		log.Fatal(err) // TODO
 	}
 
@@ -26,16 +28,39 @@ func main() {
 
 	filesHashes := make(map[string][]string)
 	computeFileHashes(basePath, entries, filesHashes)
-	fmt.Println(filesHashes)
+
+	if flag == "-r" {
+		removeDuplicates(filesHashes)
+	} else {
+		printDuplicates(filesHashes)
+	}
+}
+
+func usage() {
+	fmt.Println("To use effingo you need to provide the path that will be analysed:")
+	fmt.Println("\teffingo ./path/to/dir")
+	fmt.Println()
+	fmt.Println("If no flags were given, effingo will search and print the duplicate files.")
+	fmt.Println("If you want to remove the duplicate files, you need to provide a -r flag:")
+	fmt.Println("\teffingo ./path/to/dir -r")
+	fmt.Println()
 }
 
 // will return the first argument given to the program
-func getFsFromArgs() (string, error) {
-	if len(os.Args) == 1 {
-		return "", errors.New(NoFileSystemGiven)
+func getArgs() (string, string, error) {
+	if len(os.Args) <= 1 {
+		return "", "", errors.New(NoFileSystemGiven)
 	}
 
-	return os.Args[1], nil
+	var flag string
+	if len(os.Args) > 2 {
+		flag = os.Args[2]
+		if flag != "-r" {
+			return "", "", errors.New(InvalidFlag)
+		}
+	}
+
+	return os.Args[1], flag, nil
 }
 
 func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[string][]string) {
@@ -84,4 +109,20 @@ func computeHash(bytes []byte) string {
 	hash := sha256.Sum256(bytes)
 	hex_hash := fmt.Sprintf("%x", hash)
 	return hex_hash
+}
+
+func printDuplicates(filesHashes map[string][]string) {
+	for _, locations := range filesHashes {
+		if len(locations) > 1 {
+			fmt.Println("Those files are duplicated")
+			for _, fileName := range locations {
+				fmt.Printf("\t%v\n", fileName)
+			}
+		}
+	}
+}
+
+func removeDuplicates(filesHashse map[string][]string) {
+	// TODO remove duplicates
+	fmt.Println("About to remove duplicates...")
 }
