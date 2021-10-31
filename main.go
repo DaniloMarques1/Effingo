@@ -49,6 +49,7 @@ func usage() {
 
 // will return the first argument given to the program
 func getArgs() (string, string, error) {
+	// TODO by default we ignore hidden files, we should have a flag to include them
 	if len(os.Args) <= 1 {
 		return "", "", errors.New(NoFileSystemGiven)
 	}
@@ -84,11 +85,13 @@ func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[s
 			}
 		} else {
 			// TODO finds a way to do it without recursion to prevent call stack problem
-			subEntries, err := os.ReadDir(fullPath)
-			if err != nil {
-				log.Fatal(err) // TODO
+			if entry.Name()[0] != '.' {
+				subEntries, err := os.ReadDir(fullPath)
+				if err != nil {
+					log.Fatal(err) // TODO
+				}
+				computeFileHashes(fullPath, subEntries, filesHashes)
 			}
-			computeFileHashes(fullPath, subEntries, filesHashes)
 		}
 	}
 }
@@ -131,7 +134,17 @@ func printDuplicates(filesHashes map[string][]string) {
 
 // iterates the file hashes and remove the files
 // that are duplicated
-func removeDuplicates(filesHashse map[string][]string) {
-	// TODO remove duplicates
-	fmt.Println("About to remove duplicates...")
+func removeDuplicates(fileHashes map[string][]string) {
+	for _, locations := range fileHashes {
+		if len(locations) > 1 {
+			for _, fileName := range locations[1:] {
+				fmt.Printf("Removing duplicate file %v\n", fileName)
+				err := os.Remove(fileName)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			fmt.Printf("Remaining %v\n", locations[0])
+		}
+	}
 }
