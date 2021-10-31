@@ -12,7 +12,13 @@ import (
 const (
 	NoFileSystemGiven = "You need to provide a file system path"
 	InvalidFlag       = "The given flag is invalid"
+	InvalidUsage      = "Invalid usage"
 )
+
+type Flag struct {
+	shouldRemove  bool
+	includeHidden bool
+}
 
 func main() {
 	basePath, flag, err := getArgs()
@@ -26,13 +32,13 @@ func main() {
 		log.Fatal(err) // TODO
 	}
 
-	filesHashes := make(map[string][]string)
-	computeFileHashes(basePath, entries, filesHashes)
+	hashes := make(map[string][]string)
+	computeFileHashes(basePath, entries, hashes, flag.includeHidden)
 
-	if flag == "-r" {
-		removeDuplicates(filesHashes)
+	if flag.shouldRemove {
+		removeDuplicates(hashes)
 	} else {
-		printDuplicates(filesHashes)
+		printDuplicates(hashes)
 	}
 }
 
@@ -44,29 +50,36 @@ func usage() {
 	fmt.Println("If no flags were given, effingo will search and print the duplicate files.")
 	fmt.Println("If you want to remove the duplicate files, you need to provide a -r flag:")
 	fmt.Println("\teffingo ./path/to/dir -r")
+	fmt.Println("If you want to include the hidden files in the seach add the -i flag:")
+	fmt.Println("\teffingo ./path/to/dir -i")
+
 	fmt.Println()
 }
 
 // will return the first argument given to the program
-func getArgs() (string, string, error) {
+func getArgs() (string, *Flag, error) {
 	// TODO by default we ignore hidden files, we should have a flag to include them
 	if len(os.Args) <= 1 {
-		return "", "", errors.New(NoFileSystemGiven)
+		return "", nil, errors.New(NoFileSystemGiven)
+	}
+	if len(os.Args) > 4 {
+		return "", nil, errors.New(InvalidUsage)
 	}
 
-	var flag string
-	if len(os.Args) > 2 {
-		flag = os.Args[2]
-		if flag != "-r" {
-			return "", "", errors.New(InvalidFlag)
+	var flag Flag
+	for _, f := range os.Args[2:] {
+		if f == "-r" {
+			flag.shouldRemove = true
+		} else if f == "-i" {
+			flag.includeHidden = true
 		}
 	}
 
-	return os.Args[1], flag, nil
+	return os.Args[1], &flag, nil
 }
 
 // traversy the entries of the given file system and populate the filehashes map
-func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[string][]string) {
+func computeFileHashes(basePath string, entries []os.DirEntry, hashes map[string][]string, includeHidden bool) {
 	for _, entry := range entries {
 		fullPath := fmt.Sprintf("%s/%s", basePath, entry.Name())
 		if !entry.IsDir() {
@@ -76,22 +89,24 @@ func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[s
 			}
 
 			hash := computeHash(bytes)
-			locations, ok := filesHashes[hash]
+			locations, ok := hashes[hash]
 			if !ok {
-				filesHashes[hash] = []string{fullPath}
+				hashes[hash] = []string{fullPath}
 			} else {
 				locations = append(locations, fullPath)
-				filesHashes[hash] = locations
+				hashes[hash] = locations
 			}
 		} else {
 			// TODO finds a way to do it without recursion to prevent call stack problem
-			if entry.Name()[0] != '.' {
-				subEntries, err := os.ReadDir(fullPath)
-				if err != nil {
-					log.Fatal(err) // TODO
-				}
-				computeFileHashes(fullPath, subEntries, filesHashes)
+			if entry.Name()[0] == '.' && !includeHidden {
+				continue
 			}
+
+			subEntries, err := os.ReadDir(fullPath)
+			if err != nil {
+				log.Fatal(err) // TODO
+			}
+			computeFileHashes(fullPath, subEntries, hashes, includeHidden)
 		}
 	}
 }
@@ -121,8 +136,8 @@ func computeHash(bytes []byte) string {
 
 // iterates the file hashes and print the files names
 // that are duplicated
-func printDuplicates(filesHashes map[string][]string) {
-	for _, locations := range filesHashes {
+func printDuplicates(hashes map[string][]string) {
+	for _, locations := range hashes {
 		if len(locations) > 1 {
 			fmt.Println("Those files are duplicated")
 			for _, fileName := range locations {
@@ -134,8 +149,8 @@ func printDuplicates(filesHashes map[string][]string) {
 
 // iterates the file hashes and remove the files
 // that are duplicated
-func removeDuplicates(fileHashes map[string][]string) {
-	for _, locations := range fileHashes {
+func removeDuplicates(hashes map[string][]string) {
+	for _, locations := range hashes {
 		if len(locations) > 1 {
 			for _, fileName := range locations[1:] {
 				fmt.Printf("Removing duplicate file %v\n", fileName)
@@ -144,7 +159,7 @@ func removeDuplicates(fileHashes map[string][]string) {
 					log.Fatal(err)
 				}
 			}
-			fmt.Printf("Remaining %v\n", locations[0])
+			fmt.Printf("Remaining %v\n\n", locations[0])
 		}
 	}
 }
