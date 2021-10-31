@@ -16,3 +16,10 @@ If you would like to remove the duplicate files, add a -r flag
 ```console
 effingo /path -r
 ```
+
+By default the search does not include hidden files (dotfiles), if you would
+like to include them, you need to provide the -i flag.
+
+```console
+effingo /path -i -r
+```
