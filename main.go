@@ -36,6 +36,7 @@ func main() {
 	}
 }
 
+// help function
 func usage() {
 	fmt.Println("To use effingo you need to provide the path that will be analysed:")
 	fmt.Println("\teffingo ./path/to/dir")
@@ -63,6 +64,7 @@ func getArgs() (string, string, error) {
 	return os.Args[1], flag, nil
 }
 
+// traversy the entries of the given file system and populate the filehashes map
 func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[string][]string) {
 	for _, entry := range entries {
 		fullPath := fmt.Sprintf("%s/%s", basePath, entry.Name())
@@ -81,6 +83,7 @@ func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[s
 				filesHashes[hash] = locations
 			}
 		} else {
+			// TODO finds a way to do it without recursion to prevent call stack problem
 			subEntries, err := os.ReadDir(fullPath)
 			if err != nil {
 				log.Fatal(err) // TODO
@@ -90,6 +93,7 @@ func computeFileHashes(basePath string, entries []os.DirEntry, filesHashes map[s
 	}
 }
 
+// reads the fileName file and return its bytes
 func getBytesFromFile(fileName string) ([]byte, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -105,12 +109,15 @@ func getBytesFromFile(fileName string) ([]byte, error) {
 	return bytes, nil
 }
 
+// return the sha256 hash of bytes
 func computeHash(bytes []byte) string {
 	hash := sha256.Sum256(bytes)
 	hex_hash := fmt.Sprintf("%x", hash)
 	return hex_hash
 }
 
+// iterates the file hashes and print the files names
+// that are duplicated
 func printDuplicates(filesHashes map[string][]string) {
 	for _, locations := range filesHashes {
 		if len(locations) > 1 {
@@ -122,6 +129,8 @@ func printDuplicates(filesHashes map[string][]string) {
 	}
 }
 
+// iterates the file hashes and remove the files
+// that are duplicated
 func removeDuplicates(filesHashse map[string][]string) {
 	// TODO remove duplicates
 	fmt.Println("About to remove duplicates...")
