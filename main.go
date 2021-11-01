@@ -58,7 +58,6 @@ func usage() {
 
 // will return the first argument given to the program
 func getArgs() (string, *Flag, error) {
-	// TODO by default we ignore hidden files, we should have a flag to include them
 	if len(os.Args) <= 1 {
 		return "", nil, errors.New(NoFileSystemGiven)
 	}
