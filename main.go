@@ -82,7 +82,19 @@ func getArgs() (string, *Flag, error) {
 func computeFileHashes(basePath string, entries []os.DirEntry, hashes map[string][]string, includeHidden bool) {
 	for _, entry := range entries {
 		fullPath := fmt.Sprintf("%s/%s", basePath, entry.Name())
-		if !entry.IsDir() {
+		if entry.IsDir() {
+			// TODO finds a way to do it without recursion to prevent call stack problem
+			if entry.Name()[0] == '.' && !includeHidden {
+				continue
+			}
+
+			subEntries, err := os.ReadDir(fullPath)
+			if err != nil {
+				log.Fatal(err) // TODO
+			}
+			computeFileHashes(fullPath, subEntries, hashes, includeHidden)
+
+		} else {
 			bytes, err := getBytesFromFile(fullPath)
 			if err != nil {
 				log.Fatal(err) // TODO
@@ -96,17 +108,6 @@ func computeFileHashes(basePath string, entries []os.DirEntry, hashes map[string
 				locations = append(locations, fullPath)
 				hashes[hash] = locations
 			}
-		} else {
-			// TODO finds a way to do it without recursion to prevent call stack problem
-			if entry.Name()[0] == '.' && !includeHidden {
-				continue
-			}
-
-			subEntries, err := os.ReadDir(fullPath)
-			if err != nil {
-				log.Fatal(err) // TODO
-			}
-			computeFileHashes(fullPath, subEntries, hashes, includeHidden)
 		}
 	}
 }
