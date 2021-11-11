@@ -78,7 +78,8 @@ func getArgs() (string, *Flag, error) {
 }
 
 // traversy the entries of the given file system and populate the filehashes map
-func computeFileHashes(basePath string, entries []os.DirEntry, hashes map[string][]string, includeHidden bool) {
+func computeFileHashes(basePath string, entries []os.DirEntry,
+	hashes map[string][]string, includeHidden bool) {
 	for _, entry := range entries {
 		fullPath := fmt.Sprintf("%s/%s", basePath, entry.Name())
 		if entry.IsDir() {
@@ -89,14 +90,16 @@ func computeFileHashes(basePath string, entries []os.DirEntry, hashes map[string
 
 			subEntries, err := os.ReadDir(fullPath)
 			if err != nil {
-				log.Fatal(err) // TODO
+				fmt.Printf("There was a problem when trying to open the directory %v\n", fullPath)
+				continue
 			}
 			computeFileHashes(fullPath, subEntries, hashes, includeHidden)
 
 		} else {
 			bytes, err := getBytesFromFile(fullPath)
 			if err != nil {
-				log.Fatal(err) // TODO
+				fmt.Printf("There was a problem when trying to open the file %v\n", fullPath)
+				continue
 			}
 
 			hash := computeHash(bytes)
@@ -139,7 +142,7 @@ func computeHash(bytes []byte) string {
 func printDuplicates(hashes map[string][]string) {
 	for _, locations := range hashes {
 		if len(locations) > 1 {
-			fmt.Println("Those files are duplicated")
+			fmt.Println("These files are duplicated")
 			for _, fileName := range locations {
 				fmt.Printf("\t%v\n", fileName)
 			}
