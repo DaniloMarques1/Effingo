@@ -2,7 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
-	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -15,31 +15,42 @@ const (
 	InvalidUsage      = "Invalid usage"
 )
 
-type Flag struct {
+var (
 	shouldRemove  bool
 	includeHidden bool
-}
+	dir           string
+)
 
 func main() {
-	basePath, flag, err := getArgs()
-	if err != nil {
-		usage()
-		log.Fatal(err) // TODO
-	}
+	parseFlags()
+	fmt.Println(dir)
 
-	entries, err := os.ReadDir(basePath)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err) // TODO
 	}
 
 	hashes := make(map[string][]string)
-	computeFileHashes(basePath, entries, hashes, flag.includeHidden)
+	computeFileHashes(dir, entries, hashes)
 
-	if flag.shouldRemove {
+	if shouldRemove {
 		removeDuplicates(hashes)
 	} else {
 		printDuplicates(hashes)
 	}
+}
+
+func parseFlags() {
+	flag.BoolVar(&shouldRemove, "r", false, "Indicates if should remove the duplicated files")
+	flag.BoolVar(&shouldRemove, "remove", false, "Indicates if should remove the duplicated files")
+
+	flag.BoolVar(&includeHidden, "a", false, "Indicates if should include all files")
+	flag.BoolVar(&includeHidden, "all", false, "Indicates if should include all files")
+
+	flag.StringVar(&dir, "d", ".", "The file system to look for duplicate files")
+	flag.StringVar(&dir, "dir", ".", "The file system to look for duplicate files")
+
+	flag.Parse()
 }
 
 // help function
@@ -56,30 +67,9 @@ func usage() {
 	fmt.Println()
 }
 
-// will return the first argument given to the program
-func getArgs() (string, *Flag, error) {
-	if len(os.Args) <= 1 {
-		return "", nil, errors.New(NoFileSystemGiven)
-	}
-	if len(os.Args) > 4 {
-		return "", nil, errors.New(InvalidUsage)
-	}
-
-	var flag Flag
-	for _, f := range os.Args[2:] {
-		if f == "-r" {
-			flag.shouldRemove = true
-		} else if f == "-i" {
-			flag.includeHidden = true
-		}
-	}
-
-	return os.Args[1], &flag, nil
-}
-
 // traversy the entries of the given file system and populate the filehashes map
 func computeFileHashes(basePath string, entries []os.DirEntry,
-	hashes map[string][]string, includeHidden bool) {
+	hashes map[string][]string) {
 	for _, entry := range entries {
 		fullPath := fmt.Sprintf("%s/%s", basePath, entry.Name())
 		if entry.IsDir() {
@@ -93,7 +83,7 @@ func computeFileHashes(basePath string, entries []os.DirEntry,
 				fmt.Printf("There was a problem when trying to open the directory %v\n", fullPath)
 				continue
 			}
-			computeFileHashes(fullPath, subEntries, hashes, includeHidden)
+			computeFileHashes(fullPath, subEntries, hashes)
 
 		} else {
 			bytes, err := getBytesFromFile(fullPath)
