@@ -23,16 +23,23 @@ const (
 	ShouldRemoveMessage  = "Indicates if should remove the duplicated files"
 	IncludeHiddenMessage = "Indicates if should include all files"
 	DirMessage           = "The file system to look for duplicate files"
+	HelpMessage          = "Show the usage of effingo"
 )
 
 var (
 	shouldRemove  bool
 	includeHidden bool
 	dir           string
+	help          bool
 )
 
 func Run() {
 	parseFlags()
+
+	if help {
+		usage()
+		return
+	}
 
 	hashes := make(map[string][]string)
 	if cached, err := readCacheFile(); err == nil {
@@ -90,6 +97,8 @@ func parseFlags() {
 
 	flag.StringVar(&dir, "d", ".", DirMessage)
 	flag.StringVar(&dir, "dir", ".", DirMessage)
+
+	flag.BoolVar(&help, "help", false, HelpMessage)
 
 	flag.Parse()
 }
@@ -198,13 +207,11 @@ func saveCache(hashes map[string][]string) error {
 // help function
 func usage() {
 	fmt.Println("To use effingo you need to provide the path that will be analysed:")
-	fmt.Println("\teffingo ./path/to/dir")
+	fmt.Println("\teffingo -d ./path/to/dir")
 	fmt.Println()
 	fmt.Println("If no flags were given, effingo will search and print the duplicate files.")
 	fmt.Println("If you want to remove the duplicate files, you need to provide a -r flag:")
 	fmt.Println("\teffingo ./path/to/dir -r")
 	fmt.Println("If you want to include the hidden files in the seach add the -i flag:")
 	fmt.Println("\teffingo ./path/to/dir -i")
-
-	fmt.Println()
 }
