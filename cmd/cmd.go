@@ -42,7 +42,7 @@ func Run() {
 	}
 
 	hashes := make(map[string][]string)
-	if cached, err := readCacheFile(); err == nil {
+	if cached, err := readCacheFile(); err == nil && len(cached) > 0 {
 		// if no errors was returned
 		hashes = cached
 	} else {
