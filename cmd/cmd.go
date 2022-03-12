@@ -2,18 +2,20 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"time"
 )
 
 const (
-	NoFileSystemGiven = "You need to provide a file system path"
-	InvalidFlag       = "The given flag is invalid"
-	InvalidUsage      = "Invalid usage"
+	CacheExpired      = "Cache file expired"
 	CacheFile         = ".cache"
+	CacheFileSec      = 300 // five minutes in seconds
 )
 
 // helper messages
@@ -32,13 +34,19 @@ var (
 func Run() {
 	parseFlags()
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err) // TODO
-	}
-
 	hashes := make(map[string][]string)
-	computeFileHashes(dir, entries, hashes)
+	if cached, err := readCacheFile(); err == nil {
+		// if no errors was returned
+		hashes = cached
+	} else {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Fatal(err) // TODO
+		}
+
+		computeFileHashes(dir, entries, hashes)
+		saveCache(hashes) // ignoring possible errors
+	}
 
 	if shouldRemove {
 		removeDuplicates(hashes)
@@ -47,6 +55,32 @@ func Run() {
 	}
 }
 
+// read the .cache file and see if it still a valid cache file
+func readCacheFile() (map[string][]string, error) {
+	fileInfo, err := os.Stat(CacheFile)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	modTime := fileInfo.ModTime()
+	fileModTime := modTime.Unix() + CacheFileSec
+	if now > fileModTime {
+		return nil, errors.New(CacheExpired)
+	}
+
+	b, err := os.ReadFile(CacheFile)
+	if err != nil {
+		return nil, err
+	}
+	hashes := make(map[string][]string)
+	if err := json.Unmarshal(b, &hashes); err != nil {
+		return nil, err
+	}
+
+	return hashes, nil
+}
+
+// parse command line flags
 func parseFlags() {
 	flag.BoolVar(&shouldRemove, "r", false, ShouldRemoveMessage)
 	flag.BoolVar(&shouldRemove, "remove", false, ShouldRemoveMessage)
@@ -148,6 +182,17 @@ func removeDuplicates(hashes map[string][]string) {
 			fmt.Printf("Remaining %v\n\n", locations[0])
 		}
 	}
+}
+
+func saveCache(hashes map[string][]string) error {
+	b, err := json.Marshal(hashes)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(CacheFile, b, 0777); err != nil {
+		return err
+	}
+	return nil
 }
 
 // help function
