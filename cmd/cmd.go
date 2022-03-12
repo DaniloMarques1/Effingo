@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	CacheExpired      = "Cache file expired"
-	CacheFile         = ".cache"
-	CacheFileSec      = 300 // five minutes in seconds
+	CacheExpired = "Cache file expired"
+	CacheFile    = ".cache"
+	CacheFileSec = 300 // five minutes in seconds
 )
 
 // helper messages
