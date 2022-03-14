@@ -24,6 +24,7 @@ const (
 	IncludeHiddenMessage = "Indicates if should include all files"
 	DirMessage           = "The file system to look for duplicate files"
 	HelpMessage          = "Show the usage of effingo"
+	NoCacheMessage       = "Inidcates that does not want to use the cached paths"
 )
 
 var (
@@ -31,6 +32,7 @@ var (
 	includeHidden bool
 	dir           string
 	help          bool
+	noCache       bool
 )
 
 func Run() {
@@ -42,7 +44,7 @@ func Run() {
 	}
 
 	hashes := make(map[string][]string)
-	if cached, err := readCacheFile(); err == nil && len(cached) > 0 {
+	if cached, err := readCacheFile(); err == nil && len(cached) > 0 && !noCache {
 		// if no errors was returned
 		hashes = cached
 	} else {
@@ -99,6 +101,8 @@ func parseFlags() {
 	flag.StringVar(&dir, "dir", ".", DirMessage)
 
 	flag.BoolVar(&help, "help", false, HelpMessage)
+
+	flag.BoolVar(&noCache, "no-cache", false, NoCacheMessage)
 
 	flag.Parse()
 }
@@ -214,4 +218,15 @@ func usage() {
 	fmt.Println("\teffingo ./path/to/dir -r")
 	fmt.Println("If you want to include the hidden files in the seach add the -i flag:")
 	fmt.Println("\teffingo ./path/to/dir -i")
+	fmt.Println()
+	fmt.Println("List of possible options: ")
+	fmt.Println()
+	fmt.Printf("--r            %v\n", ShouldRemoveMessage) 
+	fmt.Printf("--remove       %v\n", ShouldRemoveMessage) 
+	fmt.Printf("--a            %v\n", IncludeHiddenMessage) 
+	fmt.Printf("--all          %v\n", IncludeHiddenMessage) 
+	fmt.Printf("--d            %v\n", DirMessage) 
+	fmt.Printf("--dir          %v\n", DirMessage) 
+	fmt.Printf("--help         %v\n", HelpMessage) 
+	fmt.Printf("--no-cache     %v\n", NoCacheMessage) 
 }
