@@ -16,116 +16,119 @@ const (
 	CacheFileName = ".effingo_cache" // TODO: needs a better location
 )
 
+type Cache struct {
+	DuplicatedHashes []string            `json:"duplicated_hashes"`
+	Locations        map[string][]string `json:"locations"`
+	RootPath         string              `json:"root_path"`
+}
+
 type DirTraverser struct {
-	basePath         string
+	rootPath         string
 	ignoreCache      bool
 	shouldRemove     bool
-	dirsPaths        []string // keep track of all subdirs inside basePath
+	subDirsPaths     []string // keep track of all subdirs inside the rootPath
 	duplicatedHashes []string
 
 	wg sync.WaitGroup
 
-	mu        sync.Mutex
-	locations map[string][]string // a map of hash and locations
+	mu     sync.Mutex
+	hashes map[string][]string // a map of hash and locations
 }
 
-type Cache struct {
-	DuplicatedHashes []string            `json:"duplicated_hashes"`
-	Locations        map[string][]string `json:"locations"`
-	BasePath         string              `json:"base_path"`
-}
-
-func NewDirTraverser(basePath string, ignoreCache, shouldRemove bool) (*DirTraverser, error) {
+func NewDirTraverser(rootPath string, ignoreCache, shouldRemove bool) (*DirTraverser, error) {
 	d := &DirTraverser{}
 
-	isDir, err := d.isDir(basePath)
-	if err != nil {
-		return nil, err
-	}
-
-	if !isDir {
+	isDir, err := d.isDir(rootPath)
+	if err != nil || !isDir {
 		return nil, errors.New("You should provide a valid directory")
 	}
 
-	d.basePath = basePath
-	d.locations = make(map[string][]string)
+	d.rootPath = rootPath
 	d.ignoreCache = ignoreCache
 	d.shouldRemove = shouldRemove
-	d.dirsPaths = make([]string, 0)
+
+	d.hashes = make(map[string][]string)
+	d.subDirsPaths = make([]string, 0)
 	d.duplicatedHashes = make([]string, 0)
 
 	return d, nil
 }
 
 func (d *DirTraverser) Run() error {
-	useCache, cache := d.shouldUseCache()
-	if useCache {
-		d.locations = cache.Locations
+	cache, ok := d.readCacheFile()
+	log.Printf("Ok = %v\n", ok)
+	if ok {
+		d.hashes = cache.Locations
 		d.duplicatedHashes = cache.DuplicatedHashes
 	} else {
 		log.Printf("Got here\n")
 		// clean the cache file
 		d.wg.Add(1)
 		go d.removeCacheFile()
-		d.traverse(d.basePath)
+		d.traverse(d.rootPath)
 		d.wg.Wait()
 		d.saveCache()
 	}
 
 	//log.Printf("Locations = %#v\n", d.locations)
-	log.Printf("Locations = %v\n", len(d.locations))
+	log.Printf("Locations = %v\n", len(d.hashes))
 
 	if d.shouldRemove {
 		d.removeDuplicates()
 	} else {
-		// TODO: print the location of duplicated files
 		d.printDuplicates()
 	}
 
 	return nil
 }
 
-func (d *DirTraverser) shouldUseCache() (bool, *Cache) {
+// will return the cached locations if there is one
+// if there is no cache it will nil and false
+func (d *DirTraverser) readCacheFile() (*Cache, bool) {
 	if d.ignoreCache {
-		return false, nil
+		return nil, false
 	}
 
 	file, err := os.Open(CacheFileName)
 	if err != nil {
 		log.Printf("Error reading cache file %v\n", err)
-		return false, nil
+		return nil, false
 	}
 	defer file.Close()
 
 	fileInfo, err := file.Stat()
 	if err != nil {
 		log.Printf("Error stating cache file %v\n", err)
-		return false, nil
+		return nil, false
 	}
 
 	cacheModificationTime := fileInfo.ModTime().Unix()
 	if d.hasCacheExpired(cacheModificationTime) {
-		return false, nil
+		log.Printf("Has expired\n")
+		return nil, false
 	}
 
 	cache := &Cache{}
 	if err := json.NewDecoder(file).Decode(cache); err != nil {
 		log.Printf("Error decoding cache file %v\n", err)
-		return false, nil
+		return nil, false
 	}
 
 	// if cached base path is different than the current base path we should not use the cache
-	if cache.BasePath != d.basePath {
+	if cache.RootPath != d.rootPath {
 		log.Printf("Different base paths %v\n", err)
-		return false, nil
+		return nil, false
 	}
 
-	return true, cache
+	return cache, true
 }
 
+// receives the last time the cache file was modified (in seconds)
+// and returns false if this time is bigger than now - 2 minutes
+// meaning the cache did not expired
 func (d *DirTraverser) hasCacheExpired(cacheTime int64) bool {
 	cacheLimitTime := time.Now().Unix() - 120
-	return cacheTime > cacheLimitTime
+	return cacheTime < cacheLimitTime
 }
 
 func (d *DirTraverser) removeCacheFile() error {
@@ -142,7 +145,7 @@ func (d *DirTraverser) traverse(path string) {
 
 	for {
 		d.computeEntries(entries, path)
-		if len(d.dirsPaths) == 0 {
+		if len(d.subDirsPaths) == 0 {
 			log.Printf("No inner dirs")
 			break
 		}
@@ -157,13 +160,13 @@ func (d *DirTraverser) traverse(path string) {
 }
 
 func (d *DirTraverser) popEntry() string {
-	path := d.dirsPaths[0]
-	if len(d.dirsPaths) == 1 {
-		d.dirsPaths = []string{}
+	path := d.subDirsPaths[0]
+	if len(d.subDirsPaths) == 1 {
+		d.subDirsPaths = []string{}
 		return path
 	}
 
-	d.dirsPaths = d.dirsPaths[1:]
+	d.subDirsPaths = d.subDirsPaths[1:]
 	return path
 }
 
@@ -173,7 +176,7 @@ func (d *DirTraverser) computeEntries(entries []os.DirEntry, path string) {
 		entryPath := filepath.Join(path, entry.Name())
 
 		if entry.IsDir() {
-			d.dirsPaths = append(d.dirsPaths, entryPath)
+			d.subDirsPaths = append(d.subDirsPaths, entryPath)
 		} else {
 			d.wg.Add(1)
 			go d.computeHash(entryPath)
@@ -199,7 +202,7 @@ func (d *DirTraverser) computeHash(fileName string) {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	v, ok := d.locations[hexHash]
+	v, ok := d.hashes[hexHash]
 
 	if !ok {
 		v = make([]string, 1)
@@ -211,13 +214,13 @@ func (d *DirTraverser) computeHash(fileName string) {
 		v = append(v, fileName)
 	}
 
-	d.locations[hexHash] = v
+	d.hashes[hexHash] = v
 }
 
 // we remove the duplicate files that we found
 func (d *DirTraverser) removeDuplicates() {
 	for _, hash := range d.duplicatedHashes {
-		location := d.locations[hash]
+		location := d.hashes[hash]
 		for len(location) > 1 {
 			var path string
 			location, path = d.popLocation(location)
@@ -231,7 +234,7 @@ func (d *DirTraverser) removeDuplicates() {
 
 func (d *DirTraverser) printDuplicates() {
 	for _, hash := range d.duplicatedHashes {
-		location := d.locations[hash]
+		location := d.hashes[hash]
 		for _, path := range location {
 			fmt.Printf("- %v\n", path)
 		}
@@ -252,9 +255,9 @@ func (d *DirTraverser) popLocation(location []string) ([]string, string) {
 // we create a cache entry that can be used if we run the effingo again
 func (d *DirTraverser) saveCache() {
 	cache := &Cache{
-		Locations:        d.locations,
+		Locations:        d.hashes,
 		DuplicatedHashes: d.duplicatedHashes,
-		BasePath:         d.basePath,
+		RootPath:         d.rootPath,
 	}
 	b, err := json.Marshal(cache)
 	if err != nil {
