@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -10,10 +9,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-)
-
-const (
-	CacheFileName = ".effingo_cache" // TODO: needs a better location
 )
 
 type Cache struct {
@@ -29,6 +24,8 @@ type DirTraverser struct {
 	subDirsPaths     []string // keep track of all subdirs inside the rootPath
 	duplicatedHashes []string
 
+	cacheService CacheService
+
 	wg sync.WaitGroup
 
 	mu     sync.Mutex
@@ -42,6 +39,12 @@ func NewDirTraverser(rootPath string, ignoreCache, shouldRemove bool) (*DirTrave
 	if err != nil || !isDir {
 		return nil, errors.New("You should provide a valid directory")
 	}
+
+	cacheService, err := NewCacheService()
+	if err != nil {
+		return nil, err
+	}
+	d.cacheService = cacheService
 
 	d.rootPath = rootPath
 	d.ignoreCache = ignoreCache
@@ -82,47 +85,6 @@ func (d *DirTraverser) Run() error {
 	return nil
 }
 
-// will return the cached locations if there is one
-// if there is no cache it will nil and false
-func (d *DirTraverser) readCacheFile() (*Cache, bool) {
-	if d.ignoreCache {
-		return nil, false
-	}
-
-	file, err := os.Open(CacheFileName)
-	if err != nil {
-		log.Printf("Error reading cache file %v\n", err)
-		return nil, false
-	}
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		log.Printf("Error stating cache file %v\n", err)
-		return nil, false
-	}
-
-	cacheModificationTime := fileInfo.ModTime().Unix()
-	if d.hasCacheExpired(cacheModificationTime) {
-		log.Printf("Has expired\n")
-		return nil, false
-	}
-
-	cache := &Cache{}
-	if err := json.NewDecoder(file).Decode(cache); err != nil {
-		log.Printf("Error decoding cache file %v\n", err)
-		return nil, false
-	}
-
-	// if cached base path is different than the current base path we should not use the cache
-	if cache.RootPath != d.rootPath {
-		log.Printf("Different base paths %v\n", err)
-		return nil, false
-	}
-
-	return cache, true
-}
-
 // receives the last time the cache file was modified (in seconds)
 // and returns false if this time is bigger than now - 2 minutes
 // meaning the cache did not expired
@@ -159,14 +121,16 @@ func (d *DirTraverser) traverse(path string) {
 	}
 }
 
+// remove and returns the last path of subDirsPaths
 func (d *DirTraverser) popEntry() string {
-	path := d.subDirsPaths[0]
+	lastIdx := len(d.subDirsPaths) - 1
+	path := d.subDirsPaths[lastIdx]
 	if len(d.subDirsPaths) == 1 {
 		d.subDirsPaths = []string{}
 		return path
 	}
 
-	d.subDirsPaths = d.subDirsPaths[1:]
+	d.subDirsPaths = d.subDirsPaths[0:lastIdx]
 	return path
 }
 
@@ -242,7 +206,7 @@ func (d *DirTraverser) printDuplicates() {
 	}
 }
 
-// pops the first index of the location array and return its path to be removed
+// pops the last index of the location array and return its path to be removed
 func (d *DirTraverser) popLocation(location []string) ([]string, string) {
 	if len(location) <= 1 {
 		return location, ""
@@ -259,15 +223,27 @@ func (d *DirTraverser) saveCache() {
 		DuplicatedHashes: d.duplicatedHashes,
 		RootPath:         d.rootPath,
 	}
-	b, err := json.Marshal(cache)
+
+	if err := d.cacheService.Save(cache); err != nil {
+		log.Printf("Error saving cache %v\n", err)
+	}
+}
+
+// will return the cached locations if there is one
+// if there is no cache it will nil and false
+func (d *DirTraverser) readCacheFile() (*Cache, bool) {
+	cache, err := d.cacheService.Read()
 	if err != nil {
-		log.Printf("Error marshal locations %v\n", err)
-		return
+		return nil, false
 	}
 
-	if err := os.WriteFile(CacheFileName, b, os.ModePerm); err != nil {
-		log.Printf("Error saving locations %v\n", err)
+	// if cached base path is different than the current base path we should not use the cache
+	if cache.RootPath != d.rootPath {
+		log.Printf("Different base paths %v\n", err)
+		return nil, false
 	}
+
+	return cache, true
 }
 
 // returns true if the path is a directory
