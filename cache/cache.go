@@ -1,4 +1,4 @@
-package cmd
+package cache
 
 import (
 	"encoding/json"
@@ -15,9 +15,16 @@ const (
 	CacheFileName = ".effingo_cache"
 )
 
+type Cache struct {
+	DuplicatedHashes []string            `json:"duplicated_hashes"`
+	Locations        map[string][]string `json:"locations"`
+	RootPath         string              `json:"root_path"`
+}
+
 type CacheService interface {
 	Save(*Cache) error
 	Read() (*Cache, error)
+	Evict() error
 }
 
 type FileCacheService struct {
@@ -44,7 +51,7 @@ func (c *FileCacheService) createCacheFolder() (string, error) {
 	var cachePath string
 	switch system {
 	case "windows":
-		// TODO yet to be determined
+		cachePath = filepath.Join(curUser.HomeDir, ".effingo")
 	default:
 		cachePath = filepath.Join(curUser.HomeDir, ".cache/effingo")
 	}
@@ -100,6 +107,11 @@ func (c FileCacheService) Read() (*Cache, error) {
 	}
 
 	return cache, nil
+}
+
+// remove the cached file
+func (c FileCacheService) Evict() error {
+	return os.Remove(c.fileName())
 }
 
 func (c FileCacheService) hasCacheExpired(cacheTime int64) bool {
