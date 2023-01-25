@@ -3,7 +3,6 @@ package writer
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -63,12 +62,10 @@ func (c FileCacheWriter) Read() (*Cache, error) {
 
 	cacheModificationTime := fileInfo.ModTime().Unix()
 	if c.hasCacheExpired(cacheModificationTime) {
-		log.Printf("Has expired\n")
 		return nil, errors.New("Cache expired")
 	}
 	cache := &Cache{}
 	if err := json.NewDecoder(file).Decode(cache); err != nil {
-		log.Printf("Error decoding cache file %v\n", err)
 		return nil, err
 	}
 
