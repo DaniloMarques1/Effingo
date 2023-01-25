@@ -4,13 +4,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log"
+	//"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/danilomarques1/effingo/cache"
+	"github.com/danilomarques1/effingo/writer"
 )
 
 type DirTraverser struct {
@@ -20,7 +20,8 @@ type DirTraverser struct {
 	subDirsPaths     []string // keep track of all subdirs inside the rootPath
 	duplicatedHashes []string
 
-	cacheService cache.CacheService
+	cacheWriter writer.CacheWriter
+	logWriter   writer.LogWriter
 
 	wg sync.WaitGroup
 
@@ -36,11 +37,17 @@ func NewDirTraverser(rootPath string, ignoreCache, shouldRemove bool) (*DirTrave
 		return nil, errors.New("You should provide a valid directory")
 	}
 
-	cacheService, err := cache.NewCacheService()
+	cacheWriter, err := writer.NewCacheWriter()
 	if err != nil {
 		return nil, err
 	}
-	d.cacheService = cacheService
+	logWriter, err := writer.NewLogWriter()
+	if err != nil {
+		return nil, err
+	}
+
+	d.cacheWriter = cacheWriter
+	d.logWriter = logWriter
 
 	d.rootPath = rootPath
 	d.ignoreCache = ignoreCache
@@ -54,20 +61,22 @@ func NewDirTraverser(rootPath string, ignoreCache, shouldRemove bool) (*DirTrave
 }
 
 func (d *DirTraverser) Run() error {
+	defer d.logWriter.Flush()
+
 	cache, ok := d.readCacheFile()
 	if ok {
 		d.hashes = cache.Locations
 		d.duplicatedHashes = cache.DuplicatedHashes
 	} else {
 		// clean the cache file
-		d.cacheService.Evict()
+		d.cacheWriter.Evict()
 		d.traverse(d.rootPath)
 		d.wg.Wait()
 		d.saveCache()
 	}
 
 	if d.shouldRemove {
-		d.cacheService.Evict()
+		d.cacheWriter.Evict()
 		d.removeDuplicates()
 	} else {
 		if len(d.duplicatedHashes) == 0 {
@@ -91,7 +100,7 @@ func (d *DirTraverser) hasCacheExpired(cacheTime int64) bool {
 func (d *DirTraverser) traverse(path string) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		log.Printf("Read dir error = %v\n", err) // TODO
+		d.logWriter.Err(fmt.Sprintf("Read dir error = %v\n", err))
 		return
 	}
 
@@ -104,7 +113,7 @@ func (d *DirTraverser) traverse(path string) {
 		path = d.popEntry()
 		entries, err = os.ReadDir(path)
 		if err != nil {
-			log.Printf("Read inner dir error = %v\n", err) // TODO
+			d.logWriter.Err(fmt.Sprintf("Read inner dir error = %v\n", err))
 			return
 		}
 	}
@@ -146,7 +155,7 @@ func (d *DirTraverser) computeHash(fileName string) {
 
 	b, err := os.ReadFile(fileName)
 	if err != nil {
-		log.Printf("Read file %v error %v\n", fileName, err) // TODO
+		d.logWriter.Err(fmt.Sprintf("Read file %v error %v\n", fileName, err))
 		return
 	}
 
@@ -179,7 +188,7 @@ func (d *DirTraverser) removeDuplicates() {
 			location, path = d.popLocation(location)
 			fmt.Printf("Removing the file %v\n", path)
 			if err := os.Remove(path); err != nil {
-				log.Printf("Error removing duplicated %v\n", err) // TODO
+				d.logWriter.Err(fmt.Sprintf("Error removing duplicated %v\n", err))
 			}
 		}
 	}
@@ -207,32 +216,32 @@ func (d *DirTraverser) popLocation(location []string) ([]string, string) {
 
 // we create a cache entry that can be used if we run the effingo again
 func (d *DirTraverser) saveCache() {
-	c := &cache.Cache{
+	c := &writer.Cache{
 		Locations:        d.hashes,
 		DuplicatedHashes: d.duplicatedHashes,
 		RootPath:         d.rootPath,
 	}
 
-	if err := d.cacheService.Save(c); err != nil {
-		log.Printf("Error saving cache %v\n", err) // TODO
+	if err := d.cacheWriter.Save(c); err != nil {
+		d.logWriter.Err(fmt.Sprintf("Error saving cache %v\n", err))
 	}
 }
 
 // will return the cached locations if there is one
 // if there is no cache it will nil and false
-func (d *DirTraverser) readCacheFile() (*cache.Cache, bool) {
+func (d *DirTraverser) readCacheFile() (*writer.Cache, bool) {
 	if d.ignoreCache {
 		return nil, false
 	}
 
-	cache, err := d.cacheService.Read()
+	cache, err := d.cacheWriter.Read()
 	if err != nil {
 		return nil, false
 	}
 
 	// if cached base path is different than the current base path we should not use the cache
 	if cache.RootPath != d.rootPath {
-		log.Printf("Different base paths %v\n", err) // TODO
+		d.logWriter.Err(fmt.Sprintf("Different base paths %v\n", err))
 		return nil, false
 	}
 
@@ -243,7 +252,7 @@ func (d *DirTraverser) readCacheFile() (*cache.Cache, bool) {
 func (d *DirTraverser) isDir(path string) (bool, error) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		log.Printf("Error stat %v\n", err) // TODO
+		d.logWriter.Err(fmt.Sprintf("Error stat %v\n", err))
 		return false, err
 	}
 	return fileInfo.IsDir(), nil
