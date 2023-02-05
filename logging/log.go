@@ -1,4 +1,4 @@
-package writer
+package logging
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/danilomarques1/effingo/folder"
 )
 
 const (
@@ -24,7 +26,7 @@ type FileLogWriter struct {
 
 func NewLogWriter() (LogWriter, error) {
 	l := &FileLogWriter{}
-	dirName, err := getEffingoFolderPath()
+	dirName, err := folder.GetEffingoFolderPath()
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package writer
+package cache
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/danilomarques1/effingo/folder"
 )
 
 type Cache struct {
@@ -26,7 +28,7 @@ type FileCacheWriter struct {
 
 func NewCacheWriter() (CacheWriter, error) {
 	c := &FileCacheWriter{}
-	dirName, err := getEffingoFolderPath()
+	dirName, err := folder.GetEffingoFolderPath()
 	if err != nil {
 		return nil, err
 	}

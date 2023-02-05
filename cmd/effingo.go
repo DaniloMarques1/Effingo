@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danilomarques1/effingo/writer"
+	"github.com/danilomarques1/effingo/cache"
+	"github.com/danilomarques1/effingo/logging"
 )
 
 type DirTraverser struct {
@@ -19,8 +20,8 @@ type DirTraverser struct {
 	subDirsPaths     []string // keep track of all subdirs inside the rootPath
 	duplicatedHashes []string
 
-	cacheWriter writer.CacheWriter
-	logWriter   writer.LogWriter
+	cacheWriter cache.CacheWriter
+	logWriter   logging.LogWriter
 
 	wg sync.WaitGroup
 
@@ -36,11 +37,11 @@ func NewDirTraverser(rootPath string, ignoreCache, shouldRemove bool) (*DirTrave
 		return nil, errors.New("You should provide a valid directory")
 	}
 
-	cacheWriter, err := writer.NewCacheWriter()
+	cacheWriter, err := cache.NewCacheWriter()
 	if err != nil {
 		return nil, err
 	}
-	logWriter, err := writer.NewLogWriter()
+	logWriter, err := logging.NewLogWriter()
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +216,7 @@ func (d *DirTraverser) popLocation(location []string) ([]string, string) {
 
 // we create a cache entry that can be used if we run the effingo again
 func (d *DirTraverser) saveCache() {
-	c := &writer.Cache{
+	c := &cache.Cache{
 		Locations:        d.hashes,
 		DuplicatedHashes: d.duplicatedHashes,
 		RootPath:         d.rootPath,
@@ -228,7 +229,7 @@ func (d *DirTraverser) saveCache() {
 
 // will return the cached locations if there is one
 // if there is no cache it will nil and false
-func (d *DirTraverser) readCacheFile() (*writer.Cache, bool) {
+func (d *DirTraverser) readCacheFile() (*cache.Cache, bool) {
 	if d.ignoreCache {
 		return nil, false
 	}

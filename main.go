@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/danilomarques1/effingo/cmd"
-	"github.com/danilomarques1/effingo/writer"
+	"github.com/danilomarques1/effingo/folder"
 )
 
 var (
@@ -23,7 +23,7 @@ func main() {
 	dir := flag.String("dir", cwd, "The directory to search for duplicate files")
 	flag.Parse()
 
-	if err := writer.CreateEffingoFolter(); err != nil {
+	if err := folder.CreateEffingoFolter(); err != nil {
 		log.Fatal(err)
 	}
 

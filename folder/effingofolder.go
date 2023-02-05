@@ -1,4 +1,4 @@
-package writer
+package folder
 
 import (
 	"errors"
@@ -8,9 +8,9 @@ import (
 	"runtime"
 )
 
-// getEffingoFolderPath returns the home directory for the
+// GetEffingoFolderPath returns the home directory for the
 // effingo log and cache files
-func getEffingoFolderPath() (string, error) {
+func GetEffingoFolderPath() (string, error) {
 	curUser, err := user.Current()
 	if err != nil {
 		return "", err
@@ -32,7 +32,7 @@ func getEffingoFolderPath() (string, error) {
 // CreateEffingoFolter creates the effingo folder that will hold the
 // cache and log gile
 func CreateEffingoFolter() error {
-	effingoPath, err := getEffingoFolderPath()
+	effingoPath, err := GetEffingoFolderPath()
 	if err != nil {
 		return err
 	}
