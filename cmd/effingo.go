@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	//"log"
 	"os"
 	"path/filepath"
 	"sync"

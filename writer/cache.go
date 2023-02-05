@@ -35,6 +35,7 @@ func NewCacheWriter() (CacheWriter, error) {
 	return c, nil
 }
 
+// Save the cache to cacheFileName as a json
 func (c FileCacheWriter) Save(cache *Cache) error {
 	b, err := json.Marshal(cache)
 	if err != nil {
@@ -48,6 +49,7 @@ func (c FileCacheWriter) Save(cache *Cache) error {
 	return nil
 }
 
+// Read the cacheFileName and parses inside a Cache struct.
 func (c FileCacheWriter) Read() (*Cache, error) {
 	file, err := os.Open(c.cacheFileName)
 	if err != nil {
@@ -72,11 +74,13 @@ func (c FileCacheWriter) Read() (*Cache, error) {
 	return cache, nil
 }
 
-// remove the cached file
+// Evict remove the cached file
 func (c FileCacheWriter) Evict() error {
 	return os.Remove(c.cacheFileName)
 }
 
+// hasCacheExpired returns true if the cache has
+// been expired (it's at least two minutes old)
 func (c FileCacheWriter) hasCacheExpired(cacheTime int64) bool {
 	cacheLimitTime := time.Now().Unix() - 120
 	return cacheTime < cacheLimitTime

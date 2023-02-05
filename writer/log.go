@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-// TODO think of way to allow structured log
-
 const (
 	MaxLogFileSizeInBytes = 5000000
 )
@@ -37,12 +35,14 @@ func NewLogWriter() (LogWriter, error) {
 	return l, nil
 }
 
-// receive a formatted string
+// Err receive a formatted string and keep in the logs
+// to be later flushed
 func (l *FileLogWriter) Err(err string) {
 	l.logs = append(l.logs, err)
 }
 
-// the returned error will likely be ignored
+// Flush will write to the logFileName
+// the contents inside logs
 func (l *FileLogWriter) Flush() error {
 	file, err := os.OpenFile(l.logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
@@ -76,6 +76,7 @@ func (l *FileLogWriter) Flush() error {
 	return nil
 }
 
+// formatLogMessage format the error message received
 func (l *FileLogWriter) formatLogMessage(msg string) string {
 	return fmt.Sprintf("%v - %v", time.Now().String(), msg)
 }
